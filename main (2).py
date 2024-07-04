@@ -9,6 +9,7 @@ from discord.ext import commands
 import requests
 import time
 from google.api_core.exceptions import InternalServerError
+from server import keep_alive
 
 last_message_time = 0 
 genai.configure(api_key=os.environ["GOOGLE_API_KEY"])
@@ -254,5 +255,5 @@ async def on_message(message):
     except Exception as e:
         await message.channel.send("โปรลองใหม่อีกทีละทางเซิฟเวอร์ของพี่ไอรินมีปัญหาอยู่นะคะ (ขออภัยในความไม่สดวก)")
         print(f"Error: {e}")
-
+keep_alive()
 client.run(os.environ["Token"])
