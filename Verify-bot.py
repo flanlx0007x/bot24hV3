@@ -1,10 +1,10 @@
-from server import keep_alive
 import os 
 import discord
 from discord import app_commands
 from discord.ext import commands
 import json
-import os
+from server import keep_alive
+
 
 intents = discord.Intents.all()
 bot = commands.Bot(command_prefix="!", intents=intents)
@@ -43,8 +43,13 @@ class SetupView(discord.ui.View):
         select_channel.callback = self.channel_callback
         self.add_item(select_channel)
 
-        self.add_item(discord.ui.Button(label="Submit", style=discord.ButtonStyle.green, custom_id="submit_button"))
-        self.add_item(discord.ui.Button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancel_button"))
+        submit_button = discord.ui.Button(label="Submit", style=discord.ButtonStyle.green, custom_id="submit_button")
+        submit_button.callback = self.submit_button_callback
+        self.add_item(submit_button)
+
+        cancel_button = discord.ui.Button(label="Cancel", style=discord.ButtonStyle.red, custom_id="cancel_button")
+        cancel_button.callback = self.cancel_button_callback
+        self.add_item(cancel_button)
 
     async def role_callback(self, interaction: discord.Interaction):
         role_id = int(interaction.data["values"][0])
@@ -64,12 +69,17 @@ class SetupView(discord.ui.View):
         save_settings(settings)
         await interaction.response.send_message(f"Notification channel has been set to <#{channel_id}>", ephemeral=True)
 
-    async def on_interaction(self, interaction: discord.Interaction):
-        if interaction.type == discord.InteractionType.component:
-            if interaction.custom_id == "submit_button":
-                await interaction.response.send_message("Setup completed!", ephemeral=True)
-            elif interaction.custom_id == "cancel_button":
-                await interaction.response.send_message("Setup cancelled.", ephemeral=True)
+    async def submit_button_callback(self, interaction: discord.Interaction):
+        guild_id = str(interaction.guild.id)
+        if guild_id in settings and "role_id" in settings[guild_id] and "notification_channel_id" in settings[guild_id]:
+            await interaction.response.send_message(f"""```diff
++ Setup completed successfully!
+```""", ephemeral=True)
+        else:
+            await interaction.response.send_message("Setup is incomplete. Please select both a role and a notification channel.", ephemeral=True)
+
+    async def cancel_button_callback(self, interaction: discord.Interaction):
+        await interaction.response.send_message("Setup has been cancelled.", ephemeral=True)
 
 class VerifyModal(discord.ui.Modal, title="Verify User"):
     def __init__(self):
@@ -126,12 +136,18 @@ async def verify_command(interaction: discord.Interaction):
     await interaction.response.send_modal(VerifyModal())
 
 @tree.command(name="setup", description="Set the role and notification channel.")
+@app_commands.checks.has_permissions(administrator=True)
 async def setup_command(interaction: discord.Interaction):
     roles = interaction.guild.roles
     channels = interaction.guild.text_channels
 
     view = SetupView(roles, channels)
     await interaction.response.send_message("Please select the role and notification channel.", view=view, ephemeral=True)
+
+@setup_command.error
+async def setup_command_error(interaction: discord.Interaction, error):
+    if isinstance(error, app_commands.errors.MissingPermissions):
+        await interaction.response.send_message("You do not have the required permissions to use this command.", ephemeral=True)
 
 @bot.event
 async def on_ready():
